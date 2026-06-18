@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { Field } from '../components/Field';
 import { createSecret, deleteSecret } from '../lib/api';
 import { encryptSecret } from '../lib/crypto';
+import { getRecaptchaToken, isRecaptchaEnabled } from '../lib/recaptcha';
 
 const expiries = [
   ['15 minutes', 15],
@@ -63,7 +64,7 @@ export function CreatePage() {
     event.preventDefault();
     setError('');
     setDeleted(false);
-    setCopyFeedback('');
+      setCopyFeedback('');
 
     if (!validateForm()) {
       setError('Please fix the highlighted fields.');
@@ -72,6 +73,7 @@ export function CreatePage() {
 
     setBusy(true);
     try {
+      const recaptchaToken = await getRecaptchaToken('create_secret');
       const encrypted = await encryptSecret(secretText, passphraseEnabled ? passphrase : undefined);
       const response = await createSecret({
         senderEmail: senderEmail.trim(),
@@ -86,6 +88,7 @@ export function CreatePage() {
         sendEmail,
         manualLink,
         notifyOnReveal,
+        recaptchaToken,
         wrappedKey: encrypted.wrappedKey,
         wrappingIv: encrypted.wrappingIv,
         kdfSalt: encrypted.kdfSalt,
@@ -245,6 +248,10 @@ export function CreatePage() {
             <div className="alert notice">
               To send this notice, bQuick Secret stores the sender email only until the first successful reveal notification is claimed.
             </div>
+          ) : null}
+
+          {isRecaptchaEnabled() ? (
+            <p className="muted">This form is protected by reCAPTCHA Enterprise.</p>
           ) : null}
 
           {error ? <div className="alert error">{error}</div> : null}

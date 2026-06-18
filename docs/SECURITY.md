@@ -36,6 +36,10 @@ This means neither the link alone nor the passphrase alone is enough to decrypt 
 
 Allowed log fields are event type, status code, generic error category, and timestamp. Logs must not include request bodies, ciphertext, plaintext, recipient email, full URLs, user agent fingerprints, keys, or passphrases.
 
+## Abuse Protection
+
+Secret creation can be protected with Google reCAPTCHA Enterprise. The browser sends a token for action `create_secret`; the backend verifies the token, hostname, action, and risk score before creating a secret. The reCAPTCHA API key must remain server-side only.
+
 ## Phase 2 Placeholder
 
 Encrypted file sharing should use browser-side chunk encryption, S3 presigned PUT/GET URLs, private buckets, block public access, server-side encryption, lifecycle cleanup, and a 7 day maximum retention.

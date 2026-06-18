@@ -14,6 +14,7 @@ bQuick Secret is a public encrypted secret-sharing web application. The frontend
 - Backend: Go
 - Database: Postgres
 - Email: Amazon SES
+- Abuse protection: Google reCAPTCHA Enterprise for create-secret requests
 - Deployment: Docker Compose via Coolify
 - Phase 2 Storage: AWS S3
 
@@ -33,6 +34,7 @@ Responsibilities:
 
 - UI rendering
 - form validation
+- reCAPTCHA Enterprise token generation for create-secret submissions
 - key generation
 - browser-side AES-GCM encryption/decryption
 - optional passphrase handling
@@ -45,6 +47,7 @@ Responsibilities:
 Responsibilities:
 
 - accept encrypted payloads only
+- verify reCAPTCHA Enterprise assessments before creating secrets when configured
 - create public IDs and delete tokens
 - store ciphertext and metadata in Postgres
 - send email through SES
@@ -124,7 +127,8 @@ Request:
   "passphraseEnabled": false,
   "sendEmail": true,
   "manualLink": true,
-  "notifyOnReveal": false
+  "notifyOnReveal": false,
+  "recaptchaToken": "recaptcha-enterprise-token"
 }
 ```
 
@@ -147,6 +151,8 @@ Validation:
 - payload size must be within configured limit
 
 If notifyOnReveal=true, the backend stores the sender email as the one-time notification target until the reveal notice is claimed.
+
+If reCAPTCHA Enterprise is configured, recaptchaToken is required and must verify for action `create_secret`, the configured site key, the expected hostname, and the configured minimum score.
 
 ### 6.2 GET /api/secrets/:publicId
 
@@ -263,6 +269,10 @@ ADMIN_STATS_TOKEN=change-me
 LOG_LEVEL=info
 RATE_LIMIT_CREATE_PER_HOUR=20
 RATE_LIMIT_EMAIL_PER_HOUR=20
+RECAPTCHA_SITE_KEY=...
+RECAPTCHA_PROJECT_ID=...
+RECAPTCHA_API_KEY=...
+RECAPTCHA_MIN_SCORE=0.5
 ```
 
 ## 9. Logging Requirements
