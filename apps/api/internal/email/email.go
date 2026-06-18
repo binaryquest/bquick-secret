@@ -14,11 +14,16 @@ import (
 
 type Sender interface {
 	SendSecretLink(ctx context.Context, recipientEmail, secretURL string) error
+	SendRevealNotice(ctx context.Context, senderEmail, secretURL string) error
 }
 
 type Disabled struct{}
 
 func (Disabled) SendSecretLink(context.Context, string, string) error {
+	return errors.New("email disabled")
+}
+
+func (Disabled) SendRevealNotice(context.Context, string, string) error {
 	return errors.New("email disabled")
 }
 
@@ -56,6 +61,26 @@ The plaintext secret is decrypted in your browser. The server cannot read it.
 		Destination:      &types.Destination{ToAddresses: []string{recipientEmail}},
 		Content: &types.EmailContent{Simple: &types.Message{
 			Subject: &types.Content{Data: aws.String("You received an encrypted secret"), Charset: aws.String("UTF-8")},
+			Body:    &types.Body{Text: &types.Content{Data: aws.String(body), Charset: aws.String("UTF-8")}},
+		}},
+	})
+	return err
+}
+
+func (s *SES) SendRevealNotice(ctx context.Context, senderEmail, secretURL string) error {
+	body := fmt.Sprintf(`Your bQuick Secret link was opened and the encrypted payload was revealed in the recipient browser.
+
+Secret page:
+%s
+
+The server still cannot read the plaintext secret or browser-only decrypt key.
+`, secretURL)
+
+	_, err := s.client.SendEmail(ctx, &sesv2.SendEmailInput{
+		FromEmailAddress: aws.String(s.from),
+		Destination:      &types.Destination{ToAddresses: []string{senderEmail}},
+		Content: &types.EmailContent{Simple: &types.Message{
+			Subject: &types.Content{Data: aws.String("Your bQuick Secret was revealed"), Charset: aws.String("UTF-8")},
 			Body:    &types.Body{Text: &types.Content{Data: aws.String(body), Charset: aws.String("UTF-8")}},
 		}},
 	})

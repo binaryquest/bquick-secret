@@ -322,15 +322,31 @@ p {
 }
 
 .field-label {
+  align-items: center;
   color: #26392e;
+  display: flex;
   font-size: 14px;
   font-weight: 800;
+  gap: 8px;
+  justify-content: space-between;
 }
 
 .field-hint,
 .muted {
   color: #68766c;
   font-size: 14px;
+}
+
+.required-mark {
+  color: #7b2630;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field-error {
+  color: #7b2630;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 input,
@@ -355,6 +371,12 @@ select:focus,
 textarea:focus {
   border-color: #2d6b58;
   box-shadow: 0 0 0 3px rgba(45, 107, 88, 0.14);
+}
+
+.field-invalid input,
+.field-invalid textarea {
+  border-color: #b33b48;
+  box-shadow: 0 0 0 3px rgba(179, 59, 72, 0.12);
 }
 
 .toggle-stack {
@@ -392,6 +414,11 @@ textarea:focus {
 .notice {
   background: #eef5ff;
   color: #24456f;
+}
+
+.success {
+  background: #edf8f1;
+  color: #285c3d;
 }
 
 .copy-row {

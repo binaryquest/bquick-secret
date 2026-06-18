@@ -10,6 +10,10 @@ export function PrivacyPage() {
       <p>
         Email notices are sent without the decrypt key. The sender controls how the full secure link or fragment key is shared.
       </p>
+      <p>
+        If the sender chooses reveal notification, bQuick Secret temporarily stores the sender email as a notification target
+        and clears it after the one-time reveal notice is claimed.
+      </p>
     </section>
   );
 }

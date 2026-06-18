@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchSecret, SecretPayload } from '../lib/api';
+import { fetchSecret, reportSecretRevealed, SecretPayload } from '../lib/api';
 import { decryptSecret, readFragmentKey } from '../lib/crypto';
 
 export function SecretPage({ publicId }: { publicId: string }) {
@@ -7,6 +7,7 @@ export function SecretPage({ publicId }: { publicId: string }) {
   const [passphrase, setPassphrase] = useState('');
   const [secret, setSecret] = useState('');
   const [error, setError] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState('');
   const [busy, setBusy] = useState(true);
   const fragmentKey = readFragmentKey();
 
@@ -33,6 +34,7 @@ export function SecretPage({ publicId }: { publicId: string }) {
 
   async function reveal() {
     if (!payload) return;
+    setCopyFeedback('');
     if (!fragmentKey) {
       setError('The decrypt key is missing from the link.');
       return;
@@ -55,6 +57,7 @@ export function SecretPage({ publicId }: { publicId: string }) {
         kdfIterations: payload.kdfIterations
       });
       setSecret(plaintext);
+      void reportSecretRevealed(publicId).catch(() => undefined);
     } catch {
       setError('Could not decrypt the secret. Check the link key and passphrase.');
     } finally {
@@ -63,7 +66,18 @@ export function SecretPage({ publicId }: { publicId: string }) {
   }
 
   async function copySecret() {
-    await navigator.clipboard.writeText(secret);
+    setCopyFeedback('Copied');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(secret);
+      } else {
+        fallbackCopy(secret);
+      }
+    } catch {
+      try {
+        fallbackCopy(secret);
+      } catch {}
+    }
   }
 
   return (
@@ -90,9 +104,10 @@ export function SecretPage({ publicId }: { publicId: string }) {
             {error ? <div className="alert error">{error}</div> : null}
             <div className="actions">
               <button className="button primary" disabled={busy || !payload} onClick={reveal}>{busy ? 'Working...' : 'Reveal'}</button>
-              {secret ? <button className="button secondary" onClick={copySecret}>Copy</button> : null}
-              {secret ? <button className="button secondary" onClick={() => setSecret('')}>Clear</button> : null}
+              {secret ? <button className="button secondary" onClick={copySecret}>{copyFeedback === 'Copied' ? 'Copied' : 'Copy'}</button> : null}
+              {secret ? <button className="button secondary" onClick={() => { setSecret(''); setCopyFeedback(''); }}>Clear</button> : null}
             </div>
+            {copyFeedback ? <p className="muted" aria-live="polite">{copyFeedback}</p> : null}
             {secret ? <pre className="secret-output">{secret}</pre> : null}
           </>
         ) : null}
@@ -102,3 +117,17 @@ export function SecretPage({ publicId }: { publicId: string }) {
   );
 }
 
+function fallbackCopy(value: string) {
+  const textArea = document.createElement('textarea');
+  textArea.value = value;
+  textArea.setAttribute('readonly', '');
+  textArea.style.position = 'fixed';
+  textArea.style.opacity = '0';
+  document.body.appendChild(textArea);
+  textArea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textArea);
+  if (!copied) {
+    throw new Error('copy failed');
+  }
+}

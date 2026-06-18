@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS secrets (
     passphrase_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     delete_token_hash TEXT NULL,
     payload_size_bytes INT NOT NULL DEFAULT 0,
+    notify_sender_on_reveal BOOLEAN NOT NULL DEFAULT FALSE,
+    sender_notify_email TEXT NULL,
+    sender_notified_at TIMESTAMPTZ NULL,
     wrapped_key BYTEA NULL,
     wrapping_iv BYTEA NULL,
     kdf_salt BYTEA NULL,
@@ -31,6 +34,9 @@ ALTER TABLE secrets ADD COLUMN IF NOT EXISTS wrapping_iv BYTEA NULL;
 ALTER TABLE secrets ADD COLUMN IF NOT EXISTS kdf_salt BYTEA NULL;
 ALTER TABLE secrets ADD COLUMN IF NOT EXISTS kdf_iterations INT NULL;
 ALTER TABLE secrets ADD COLUMN IF NOT EXISTS kdf_algorithm TEXT NULL;
+ALTER TABLE secrets ADD COLUMN IF NOT EXISTS notify_sender_on_reveal BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE secrets ADD COLUMN IF NOT EXISTS sender_notify_email TEXT NULL;
+ALTER TABLE secrets ADD COLUMN IF NOT EXISTS sender_notified_at TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS idx_secrets_public_id ON secrets(public_id);
 CREATE INDEX IF NOT EXISTS idx_secrets_expires_at ON secrets(expires_at);
