@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ../db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bquick_secret} -d ${POSTGRES_DB:-bquick_secret}"]
       interval: 10s
@@ -17,7 +17,7 @@ services:
 
   api:
     build:
-      context: ../apps/api
+      context: ./apps/api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -43,7 +43,7 @@ services:
 
   web:
     build:
-      context: ../apps/web
+      context: ./apps/web
       args:
         VITE_API_BASE_URL: /api
     restart: unless-stopped
