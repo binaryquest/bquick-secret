@@ -8,10 +8,28 @@ export function SecretPage({ publicId }: { publicId: string }) {
   const [secret, setSecret] = useState('');
   const [error, setError] = useState('');
   const [copyFeedback, setCopyFeedback] = useState('');
-  const [busy, setBusy] = useState(true);
-  const fragmentKey = readFragmentKey();
+  const [busy, setBusy] = useState(Boolean(readFragmentKey()));
+  const [fragmentKey, setFragmentKey] = useState(readFragmentKey);
 
   useEffect(() => {
+    function syncFragmentKey() {
+      setFragmentKey(readFragmentKey());
+    }
+    window.addEventListener('hashchange', syncFragmentKey);
+    syncFragmentKey();
+    return () => window.removeEventListener('hashchange', syncFragmentKey);
+  }, []);
+
+  useEffect(() => {
+    setPayload(null);
+    setSecret('');
+    setCopyFeedback('');
+    if (!fragmentKey) {
+      setBusy(false);
+      setError('');
+      return;
+    }
+
     let cancelled = false;
     setBusy(true);
     fetchSecret(publicId)
@@ -30,7 +48,7 @@ export function SecretPage({ publicId }: { publicId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [publicId]);
+  }, [publicId, fragmentKey]);
 
   async function reveal() {
     if (!payload) return;
@@ -89,12 +107,21 @@ export function SecretPage({ publicId }: { publicId: string }) {
 
       <div className="tool-surface">
         {busy && !payload ? <p className="muted">Loading encrypted payload...</p> : null}
+        {!fragmentKey ? (
+          <>
+            <p className="muted">
+              This keyless email notice opened the secret page, but it does not include the browser-only decrypt key.
+            </p>
+            <div className="alert notice">
+              Ask the sender for the full secure link containing <code>#key=...</code>, or for the fragment key through a separate channel.
+            </div>
+          </>
+        ) : null}
         {payload ? (
           <>
             <p className="muted">
               The encrypted payload has been retrieved. Decryption happens locally in this browser.
             </p>
-            {!fragmentKey ? <div className="alert error">The URL is missing `#key=...`.</div> : null}
             {payload.passphraseEnabled ? (
               <label className="field">
                 <span className="field-label">Passphrase</span>

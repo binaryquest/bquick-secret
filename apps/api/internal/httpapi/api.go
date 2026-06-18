@@ -13,18 +13,27 @@ import (
 	"bquick-secret/apps/api/internal/config"
 	secretcrypto "bquick-secret/apps/api/internal/crypto"
 	"bquick-secret/apps/api/internal/email"
+	"bquick-secret/apps/api/internal/recaptcha"
 	"bquick-secret/apps/api/internal/store"
 )
 
 type API struct {
-	cfg    config.Config
-	store  *store.Store
-	mailer email.Sender
-	logger *slog.Logger
+	cfg     config.Config
+	store   *store.Store
+	mailer  email.Sender
+	logger  *slog.Logger
+	captcha *recaptcha.Verifier
 }
 
 func New(cfg config.Config, store *store.Store, mailer email.Sender, logger *slog.Logger) http.Handler {
-	api := &API{cfg: cfg, store: store, mailer: mailer, logger: logger}
+	captcha := recaptcha.New(recaptcha.Config{
+		APIKey:     cfg.RecaptchaAPIKey,
+		AppBaseURL: cfg.AppBaseURL,
+		MinScore:   cfg.RecaptchaMinScore,
+		ProjectID:  cfg.RecaptchaProjectID,
+		SiteKey:    cfg.RecaptchaSiteKey,
+	})
+	api := &API{cfg: cfg, store: store, mailer: mailer, logger: logger, captcha: captcha}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", api.health)
@@ -50,6 +59,7 @@ type createSecretRequest struct {
 	SendEmail         bool   `json:"sendEmail"`
 	ManualLink        bool   `json:"manualLink"`
 	NotifyOnReveal    bool   `json:"notifyOnReveal"`
+	RecaptchaToken    string `json:"recaptchaToken,omitempty"`
 	WrappedKey        string `json:"wrappedKey,omitempty"`
 	WrappingIV        string `json:"wrappingIv,omitempty"`
 	KDFSalt           string `json:"kdfSalt,omitempty"`
@@ -109,6 +119,10 @@ func (api *API) createSecret(w http.ResponseWriter, r *http.Request) {
 	payload, iv, wrapped, wrappingIV, kdfSalt, validationErr := api.validateCreate(req)
 	if validationErr != "" {
 		writeError(w, http.StatusBadRequest, validationErr)
+		return
+	}
+	if err := api.verifyRecaptcha(r, req.RecaptchaToken, "create_secret"); err != nil {
+		writeError(w, http.StatusBadRequest, "recaptcha verification failed")
 		return
 	}
 
@@ -200,6 +214,17 @@ func (api *API) createSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, createSecretResponse{PublicID: publicID, DeleteToken: deleteToken, EmailSent: emailSent})
+}
+
+func (api *API) verifyRecaptcha(r *http.Request, token, action string) error {
+	if api.captcha == nil {
+		return nil
+	}
+	if err := api.captcha.Verify(r.Context(), token, action); err != nil {
+		api.logger.Warn("recaptcha_failed", "category", "verification")
+		return err
+	}
+	return nil
 }
 
 func (api *API) validateCreate(req createSecretRequest) ([]byte, []byte, []byte, []byte, []byte, string) {

@@ -13,6 +13,7 @@ export type CreateSecretRequest = {
   sendEmail: boolean;
   manualLink: boolean;
   notifyOnReveal: boolean;
+  recaptchaToken?: string;
   wrappedKey?: string;
   wrappingIv?: string;
   kdfSalt?: string;

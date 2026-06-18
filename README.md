@@ -39,6 +39,8 @@ For frontend-only development, run the Vite app from `apps/web`. For API-only de
 
 Use `deploy/coolify-compose.yml` for production Coolify deployments. Assign your public domain to the `web` service on container port `80`; keep `api` and `postgres` private inside the Compose network.
 
+For reCAPTCHA Enterprise protection, set `RECAPTCHA_SITE_KEY`, `RECAPTCHA_PROJECT_ID`, `RECAPTCHA_API_KEY`, and `RECAPTCHA_MIN_SCORE` in Coolify. Only the site key is passed to the web build; the API key is used only by the Go API.
+
 ## Zero-Knowledge Email Behavior
 
 The backend never receives URL fragments, decrypt keys, plaintext secrets, or passphrases. Because of that, SES email sends a keyless notification link to `/s/{publicId}`. The sender must separately share the full secure link containing `#key=...` or the fragment key through another channel.

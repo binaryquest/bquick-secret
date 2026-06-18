@@ -20,6 +20,10 @@ type Config struct {
 	LogLevel             slog.Level
 	RateLimitCreateHour  int
 	RateLimitEmailHour   int
+	RecaptchaSiteKey     string
+	RecaptchaProjectID   string
+	RecaptchaAPIKey      string
+	RecaptchaMinScore    float64
 	Port                 string
 }
 
@@ -37,6 +41,10 @@ func Load() Config {
 		LogLevel:             parseLevel(getenv("LOG_LEVEL", "info")),
 		RateLimitCreateHour:  getenvInt("RATE_LIMIT_CREATE_PER_HOUR", 20),
 		RateLimitEmailHour:   getenvInt("RATE_LIMIT_EMAIL_PER_HOUR", 20),
+		RecaptchaSiteKey:     getenv("RECAPTCHA_SITE_KEY", ""),
+		RecaptchaProjectID:   getenv("RECAPTCHA_PROJECT_ID", ""),
+		RecaptchaAPIKey:      getenv("RECAPTCHA_API_KEY", ""),
+		RecaptchaMinScore:    getenvFloat("RECAPTCHA_MIN_SCORE", 0.5),
 		Port:                 getenv("PORT", "8081"),
 	}
 }
@@ -52,6 +60,14 @@ func getenv(key, fallback string) string {
 func getenvInt(key string, fallback int) int {
 	value, err := strconv.Atoi(getenv(key, ""))
 	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func getenvFloat(key string, fallback float64) float64 {
+	value, err := strconv.ParseFloat(getenv(key, ""), 64)
+	if err != nil || value < 0 || value > 1 {
 		return fallback
 	}
 	return value
