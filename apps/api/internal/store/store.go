@@ -73,11 +73,21 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 		pool.Close()
 		return nil, err
 	}
-	return &Store{pool: pool}, nil
+	store := &Store{pool: pool}
+	if err := store.EnsureSchema(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return store, nil
 }
 
 func (s *Store) Close() {
 	s.pool.Close()
+}
+
+func (s *Store) EnsureSchema(ctx context.Context) error {
+	_, err := s.pool.Exec(ctx, schemaSQL)
+	return err
 }
 
 func (s *Store) CreateSecret(ctx context.Context, params CreateSecretParams) error {
