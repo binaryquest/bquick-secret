@@ -44,7 +44,7 @@ export function HomePage() {
           ['One-time view by default', 'Links can be consumed after first retrieval.'],
           ['Automatic expiry', 'Retention is capped at seven days.'],
           ['Optional passphrase', 'Require both a link fragment and a passphrase.'],
-          ['No tracking', 'Daily aggregate stats only, with no analytics scripts.']
+          ['Privacy-aware analytics', 'Page views are counted without secret IDs, URL fragments, or tracking cookies.']
         ].map(([title, body]) => (
           <article className="feature-card" key={title}>
             <h2>{title}</h2>
