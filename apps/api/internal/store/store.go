@@ -27,6 +27,8 @@ type CreateSecretParams struct {
 	RecipientEmailProvided bool
 	ManualLinkEnabled      bool
 	PassphraseEnabled      bool
+	NotifySenderOnReveal   bool
+	SenderNotifyEmail      string
 	DeleteTokenHash        string
 	PayloadSizeBytes       int
 	WrappedKey             []byte
@@ -95,17 +97,18 @@ func (s *Store) CreateSecret(ctx context.Context, params CreateSecretParams) err
 		INSERT INTO secrets (
 			public_id, encrypted_payload, iv, algorithm, version, expires_at, one_time,
 			sender_email_hash, recipient_email_provided, manual_link_enabled, passphrase_enabled,
-			delete_token_hash, payload_size_bytes, wrapped_key, wrapping_iv, kdf_salt,
-			kdf_iterations, kdf_algorithm
+			notify_sender_on_reveal, sender_notify_email, delete_token_hash, payload_size_bytes,
+			wrapped_key, wrapping_iv, kdf_salt, kdf_iterations, kdf_algorithm
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11,
 			$12, $13, $14, $15, $16,
-			$17, $18
+			$17, $18, $19, $20
 		)
 	`, params.PublicID, params.EncryptedPayload, params.IV, params.Algorithm, params.Version, params.ExpiresAt, params.OneTime,
 		params.SenderEmailHash, params.RecipientEmailProvided, params.ManualLinkEnabled, params.PassphraseEnabled,
-		params.DeleteTokenHash, params.PayloadSizeBytes, nilIfEmpty(params.WrappedKey), nilIfEmpty(params.WrappingIV),
+		params.NotifySenderOnReveal, nilIfEmptyString(params.SenderNotifyEmail), params.DeleteTokenHash, params.PayloadSizeBytes,
+		nilIfEmpty(params.WrappedKey), nilIfEmpty(params.WrappingIV),
 		nilIfEmpty(params.KDFSalt), nilIfZero(params.KDFIterations), nilIfEmptyString(params.KDFAlgorithm))
 	return err
 }
@@ -154,6 +157,33 @@ func (s *Store) DeleteSecret(ctx context.Context, publicID, deleteTokenHash stri
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+func (s *Store) ClaimRevealNotification(ctx context.Context, publicID string) (string, error) {
+	row := s.pool.QueryRow(ctx, `
+		WITH pending AS (
+			SELECT sender_notify_email
+			FROM secrets
+			WHERE public_id = $1
+				AND deleted_at IS NULL
+				AND notify_sender_on_reveal = true
+				AND sender_notify_email IS NOT NULL
+				AND sender_notified_at IS NULL
+			FOR UPDATE
+		)
+		UPDATE secrets
+		SET sender_notified_at = now(), sender_notify_email = NULL
+		FROM pending
+		WHERE public_id = $1
+		RETURNING pending.sender_notify_email
+	`, publicID)
+
+	var senderEmail string
+	err := row.Scan(&senderEmail)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return senderEmail, err
 }
 
 func (s *Store) IncrementStats(ctx context.Context, day time.Time, columns ...string) error {

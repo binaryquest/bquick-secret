@@ -12,6 +12,7 @@ export type CreateSecretRequest = {
   passphraseEnabled: boolean;
   sendEmail: boolean;
   manualLink: boolean;
+  notifyOnReveal: boolean;
   wrappedKey?: string;
   wrappingIv?: string;
   kdfSalt?: string;
@@ -53,6 +54,13 @@ export async function fetchSecret(publicId: string): Promise<SecretPayload> {
   return parseResponse(response);
 }
 
+export async function reportSecretRevealed(publicId: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/secrets/${encodeURIComponent(publicId)}/revealed`, {
+    method: 'POST'
+  });
+  await parseResponse(response);
+}
+
 export async function deleteSecret(publicId: string, deleteToken: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/secrets/${encodeURIComponent(publicId)}`, {
     method: 'DELETE',
@@ -69,4 +77,3 @@ async function parseResponse<T>(response: Response): Promise<T> {
   }
   return data as T;
 }
-

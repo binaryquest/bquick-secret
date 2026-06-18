@@ -30,6 +30,7 @@ func New(cfg config.Config, store *store.Store, mailer email.Sender, logger *slo
 	mux.HandleFunc("GET /health", api.health)
 	mux.HandleFunc("POST /api/secrets", api.createSecret)
 	mux.HandleFunc("GET /api/secrets/{publicId}", api.getSecret)
+	mux.HandleFunc("POST /api/secrets/{publicId}/revealed", api.secretRevealed)
 	mux.HandleFunc("DELETE /api/secrets/{publicId}", api.deleteSecret)
 	mux.HandleFunc("GET /api/stats/daily", api.dailyStats)
 
@@ -48,6 +49,7 @@ type createSecretRequest struct {
 	PassphraseEnabled bool   `json:"passphraseEnabled"`
 	SendEmail         bool   `json:"sendEmail"`
 	ManualLink        bool   `json:"manualLink"`
+	NotifyOnReveal    bool   `json:"notifyOnReveal"`
 	WrappedKey        string `json:"wrappedKey,omitempty"`
 	WrappingIV        string `json:"wrappingIv,omitempty"`
 	KDFSalt           string `json:"kdfSalt,omitempty"`
@@ -142,6 +144,10 @@ func (api *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "request failed")
 		return
 	}
+	senderNotifyEmail := ""
+	if req.NotifyOnReveal {
+		senderNotifyEmail = strings.TrimSpace(req.SenderEmail)
+	}
 
 	err = api.store.CreateSecret(r.Context(), store.CreateSecretParams{
 		PublicID:               publicID,
@@ -155,6 +161,8 @@ func (api *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		RecipientEmailProvided: req.SendEmail,
 		ManualLinkEnabled:      req.ManualLink,
 		PassphraseEnabled:      req.PassphraseEnabled,
+		NotifySenderOnReveal:   req.NotifyOnReveal,
+		SenderNotifyEmail:      senderNotifyEmail,
 		DeleteTokenHash:        secretcrypto.Hash(deleteToken),
 		PayloadSizeBytes:       len(payload),
 		WrappedKey:             wrapped,
@@ -278,6 +286,33 @@ func (api *API) getSecret(w http.ResponseWriter, r *http.Request) {
 		KDFIterations:     payload.KDFIterations,
 		KDFAlgorithm:      payload.KDFAlgorithm,
 	})
+}
+
+func (api *API) secretRevealed(w http.ResponseWriter, r *http.Request) {
+	publicID := r.PathValue("publicId")
+	if !validPublicID(publicID) {
+		writeError(w, http.StatusNotFound, "secret not available")
+		return
+	}
+
+	senderEmail, err := api.store.ClaimRevealNotification(r.Context(), publicID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeJSON(w, http.StatusOK, map[string]bool{"notified": false})
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "request failed")
+		return
+	}
+
+	secretURL := api.cfg.AppBaseURL + "/s/" + publicID
+	if err := api.mailer.SendRevealNotice(r.Context(), senderEmail, secretURL); err != nil {
+		api.logger.Warn("reveal_notice_failed", "category", "ses")
+		writeJSON(w, http.StatusOK, map[string]bool{"notified": false})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"notified": true})
 }
 
 func (api *API) deleteSecret(w http.ResponseWriter, r *http.Request) {

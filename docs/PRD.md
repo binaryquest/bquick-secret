@@ -33,6 +33,7 @@ Strict rule: the backend must never receive plaintext secrets, decryption keys, 
 - Require sender email, but avoid creating accounts.
 - Avoid storing recipient email after sending.
 - Provide manual copy-link sharing as well as email delivery.
+- Provide optional sender notification when a secret is successfully revealed.
 - Provide aggregate usage statistics without tracking users.
 - Prepare for encrypted large file sharing in Phase 2.
 
@@ -63,6 +64,7 @@ Strict rule: the backend must never receive plaintext secrets, decryption keys, 
 6. As a recipient, I want to open the link and decrypt the secret in my browser.
 7. As an operator, I want daily aggregate stats so I know the app is being used without tracking users.
 8. As an operator, I want expired secrets deleted automatically.
+9. As a sender, I want optional notification when the recipient reveals the secret so I know it was picked up.
 
 ## 7. MVP Features
 
@@ -87,6 +89,7 @@ Inputs:
 - Secret text: mandatory
 - Expiry: 15 minutes, 1 hour, 24 hours, 3 days, 7 days
 - One-time view: enabled by default
+- Notify sender when revealed: optional, disabled by default
 - Optional passphrase: supported from day one
 
 ### 7.3 Email Sending
@@ -107,6 +110,8 @@ https://secret.example.com/s/{publicId}#key={decryptKey}
 
 The recipient page retrieves encrypted payload by `publicId`. Browser JavaScript reads the key from the URL fragment and decrypts locally.
 
+If sender notification is enabled, the browser reports a successful reveal only after local decryption succeeds. The backend sends a one-time email notice to the sender and must not receive plaintext, decrypt keys, passphrases, or full URLs.
+
 ### 7.6 Expiry and Deletion
 
 Secrets expire automatically. Maximum retention is 7 days. One-time secrets are consumed after first payload retrieval. Manual deletion should be supported with a delete token.
@@ -119,7 +124,7 @@ Store daily counts only: secrets created, opened, expired, deleted, emails sent,
 
 The system must not use advertising pixels, Google Analytics, Tag Manager, session replay, unnecessary third-party scripts, browser fingerprinting, or tracking cookies.
 
-The system must not store plaintext secret, decrypt key, passphrase, recipient email after sending, full URLs, referrer, browser fingerprint, or user behavior trail.
+The system must not store plaintext secret, decrypt key, passphrase, recipient email after sending, full URLs, referrer, browser fingerprint, or user behavior trail. If the sender opts into reveal notification, the sender email may be temporarily stored as a notification target and should be cleared after the one-time notification is claimed.
 
 ## 9. Security Requirements
 

@@ -13,11 +13,11 @@ describe('create secret request shape', () => {
       oneTime: true,
       passphraseEnabled: false,
       sendEmail: false,
-      manualLink: true
+      manualLink: true,
+      notifyOnReveal: false
     };
 
     expect(JSON.stringify(request)).not.toContain('fragmentKey');
     expect(JSON.stringify(request)).not.toContain('#key=');
   });
 });
-

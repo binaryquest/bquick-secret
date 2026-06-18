@@ -38,6 +38,7 @@ Responsibilities:
 - optional passphrase handling
 - link creation with key in URL fragment
 - recipient decryption flow
+- sender reveal notification signal after successful browser decrypt
 
 ### 3.2 Go API
 
@@ -48,6 +49,7 @@ Responsibilities:
 - store ciphertext and metadata in Postgres
 - send email through SES
 - return encrypted payloads
+- send optional one-time reveal notices to senders
 - enforce expiry and one-time behavior
 - update aggregate stats
 - run cleanup
@@ -70,6 +72,7 @@ The backend must never receive or store:
 - passphrase
 - full URL containing the `#key` fragment
 - recipient email after sending
+- sender notification email after reveal notice is claimed
 - request bodies in logs
 
 The browser must encrypt before upload and decrypt after retrieval.
@@ -120,7 +123,8 @@ Request:
   "oneTime": true,
   "passphraseEnabled": false,
   "sendEmail": true,
-  "manualLink": true
+  "manualLink": true,
+  "notifyOnReveal": false
 }
 ```
 
@@ -141,6 +145,8 @@ Validation:
 - iv required
 - expiry must be <= 7 days
 - payload size must be within configured limit
+
+If notifyOnReveal=true, the backend stores the sender email as the one-time notification target until the reveal notice is claimed.
 
 ### 6.2 GET /api/secrets/:publicId
 
@@ -163,7 +169,19 @@ If expired, deleted, or consumed, return 404 with a generic message.
 
 For one-time secrets, the server should consume on first successful encrypted payload fetch.
 
-### 6.3 DELETE /api/secrets/:publicId
+### 6.3 POST /api/secrets/:publicId/revealed
+
+Called by the browser only after local decryption succeeds. If sender notification was enabled and not already claimed, the backend sends a one-time email notice to the sender. The request must not include plaintext, decrypt keys, passphrases, or full URLs.
+
+Response:
+
+```json
+{
+  "notified": true
+}
+```
+
+### 6.4 DELETE /api/secrets/:publicId
 
 Deletes a secret using a delete token.
 
@@ -175,11 +193,11 @@ Request:
 }
 ```
 
-### 6.4 GET /api/stats/daily
+### 6.5 GET /api/stats/daily
 
 Protected by admin token. Returns aggregate daily stats only.
 
-### 6.5 GET /health
+### 6.6 GET /health
 
 Returns service health.
 
@@ -203,6 +221,9 @@ CREATE TABLE secrets (
     passphrase_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     delete_token_hash TEXT NULL,
     payload_size_bytes INT NOT NULL,
+    notify_sender_on_reveal BOOLEAN NOT NULL DEFAULT FALSE,
+    sender_notify_email TEXT NULL,
+    sender_notified_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -260,6 +281,7 @@ Rate limit by short-lived hashed keys. Use sender email hash and short-lived IP 
 - One-time view is default.
 - Expired secrets are inaccessible and purged.
 - Stats are aggregate-only.
+- Sender reveal notification is opt-in and clears the notification email after the one-time notice is claimed.
 - Docker Compose deployment works locally and in Coolify.
 
 ## 12. Phase 2 SRS Notes

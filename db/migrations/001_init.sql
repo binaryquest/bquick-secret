@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS secrets (
     passphrase_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     delete_token_hash TEXT NULL,
     payload_size_bytes INT NOT NULL,
+    notify_sender_on_reveal BOOLEAN NOT NULL DEFAULT FALSE,
+    sender_notify_email TEXT NULL,
+    sender_notified_at TIMESTAMPTZ NULL,
     wrapped_key BYTEA NULL,
     wrapping_iv BYTEA NULL,
     kdf_salt BYTEA NULL,
@@ -47,4 +50,3 @@ CREATE TABLE IF NOT EXISTS rate_limit_buckets (
     count INT NOT NULL DEFAULT 0,
     resets_at TIMESTAMPTZ NOT NULL
 );
-

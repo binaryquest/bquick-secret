@@ -16,7 +16,10 @@ type Result = {
   deleteToken: string;
   secureLink: string;
   emailSent: boolean;
+  notifyOnReveal: boolean;
 };
+
+type FieldErrors = Partial<Record<'senderEmail' | 'recipientEmail' | 'secretText' | 'passphrase', string>>;
 
 export function CreatePage() {
   const [senderEmail, setSenderEmail] = useState('');
@@ -28,29 +31,42 @@ export function CreatePage() {
   const [passphrase, setPassphrase] = useState('');
   const [sendEmail, setSendEmail] = useState(false);
   const [manualLink, setManualLink] = useState(true);
+  const [notifyOnReveal, setNotifyOnReveal] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState('');
 
   const appBaseUrl = useMemo(() => import.meta.env.VITE_APP_BASE_URL || window.location.origin, []);
+
+  function validateForm() {
+    const nextErrors: FieldErrors = {};
+    if (!looksLikeEmail(senderEmail)) {
+      nextErrors.senderEmail = 'Enter a valid sender email.';
+    }
+    if (sendEmail && !looksLikeEmail(recipientEmail)) {
+      nextErrors.recipientEmail = 'Recipient email is required for keyless email notice.';
+    }
+    if (!secretText.trim()) {
+      nextErrors.secretText = 'Secret text is required.';
+    }
+    if (passphraseEnabled && passphrase.length < 8) {
+      nextErrors.passphrase = 'Use at least 8 characters.';
+    }
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
     setDeleted(false);
-    setResult(null);
+    setCopyFeedback('');
 
-    if (!senderEmail.trim() || !secretText.trim()) {
-      setError('Sender email and secret text are required.');
-      return;
-    }
-    if (sendEmail && !recipientEmail.trim()) {
-      setError('Recipient email is required when email delivery is enabled.');
-      return;
-    }
-    if (passphraseEnabled && passphrase.length < 8) {
-      setError('Use at least 8 characters for the passphrase.');
+    if (!validateForm()) {
+      setError('Please fix the highlighted fields.');
       return;
     }
 
@@ -58,8 +74,8 @@ export function CreatePage() {
     try {
       const encrypted = await encryptSecret(secretText, passphraseEnabled ? passphrase : undefined);
       const response = await createSecret({
-        senderEmail,
-        recipientEmail: recipientEmail || undefined,
+        senderEmail: senderEmail.trim(),
+        recipientEmail: recipientEmail.trim() || undefined,
         encryptedPayload: encrypted.encryptedPayload,
         iv: encrypted.iv,
         algorithm: 'AES-256-GCM',
@@ -69,6 +85,7 @@ export function CreatePage() {
         passphraseEnabled,
         sendEmail,
         manualLink,
+        notifyOnReveal,
         wrappedKey: encrypted.wrappedKey,
         wrappingIv: encrypted.wrappingIv,
         kdfSalt: encrypted.kdfSalt,
@@ -76,9 +93,11 @@ export function CreatePage() {
         kdfAlgorithm: encrypted.kdfAlgorithm
       });
       const secureLink = `${appBaseUrl}/s/${response.publicId}#key=${encrypted.fragmentKey}`;
-      setResult({ ...response, secureLink });
+      setResult({ ...response, secureLink, notifyOnReveal });
       setSecretText('');
       setPassphrase('');
+      setRecipientEmail('');
+      setFieldErrors({});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the secret.');
     } finally {
@@ -87,7 +106,12 @@ export function CreatePage() {
   }
 
   async function copy(value: string) {
-    await navigator.clipboard.writeText(value);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyFeedback('Secure link copied.');
+    } catch {
+      setCopyFeedback('Could not copy automatically. Select the link and copy it manually.');
+    }
   }
 
   async function onDelete() {
@@ -104,6 +128,17 @@ export function CreatePage() {
     }
   }
 
+  function createAnother() {
+    setResult(null);
+    setDeleted(false);
+    setError('');
+    setFieldErrors({});
+    setCopyFeedback('');
+    setSecretText('');
+    setPassphrase('');
+    setRecipientEmail('');
+  }
+
   return (
     <section className="workspace">
       <div className="section-heading">
@@ -111,60 +146,21 @@ export function CreatePage() {
         <h1>Encrypt a secret in this browser</h1>
       </div>
 
-      <form className="tool-surface" onSubmit={onSubmit}>
-        <div className="form-grid">
-          <Field label="Sender email">
-            <input value={senderEmail} onChange={(event) => setSenderEmail(event.target.value)} type="email" required />
-          </Field>
-          <Field label="Recipient email" hint={sendEmail ? 'Used for sending only, never stored.' : undefined}>
-            <input value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} type="email" placeholder="Optional" />
-          </Field>
-        </div>
-
-        <Field label="Secret text">
-          <textarea value={secretText} onChange={(event) => setSecretText(event.target.value)} required rows={8} />
-        </Field>
-
-        <div className="form-grid">
-          <Field label="Expiry">
-            <select value={expiresInMinutes} onChange={(event) => setExpiresInMinutes(Number(event.target.value))}>
-              {expiries.map(([label, value]) => (
-                <option value={value} key={value}>{label}</option>
-              ))}
-            </select>
-          </Field>
-          <div className="toggle-stack" aria-label="Secret options">
-            <label><input type="checkbox" checked={oneTime} onChange={(event) => setOneTime(event.target.checked)} /> One-time view</label>
-            <label><input type="checkbox" checked={manualLink} onChange={(event) => setManualLink(event.target.checked)} /> Manual copy link</label>
-            <label><input type="checkbox" checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} /> Send keyless email notice</label>
-            <label><input type="checkbox" checked={passphraseEnabled} onChange={(event) => setPassphraseEnabled(event.target.checked)} /> Require passphrase</label>
-          </div>
-        </div>
-
-        {passphraseEnabled ? (
-          <Field label="Passphrase" hint="The passphrase is used only in this browser and is never sent.">
-            <input value={passphrase} onChange={(event) => setPassphrase(event.target.value)} type="password" autoComplete="new-password" />
-          </Field>
-        ) : null}
-
-        {error ? <div className="alert error">{error}</div> : null}
-
-        <div className="actions">
-          <button className="button primary" disabled={busy}>{busy ? 'Working...' : 'Create encrypted secret'}</button>
-        </div>
-      </form>
-
       {result ? (
         <section className="result-panel" aria-live="polite">
           <h2>Secret created</h2>
           <p>The full secure link exists only in this browser. It includes the decrypt key after `#`.</p>
           <div className="copy-row">
-            <input readOnly value={result.secureLink} />
-            <button className="button secondary" onClick={() => copy(result.secureLink)}>Copy</button>
+            <input readOnly value={result.secureLink} aria-label="Secure secret link" />
+            <button className="button secondary" onClick={() => copy(result.secureLink)}>
+              {copyFeedback === 'Secure link copied.' ? 'Copied' : 'Copy'}
+            </button>
           </div>
+          {copyFeedback ? <div className="alert success">{copyFeedback}</div> : null}
           <p className="muted">Delete token: <code>{result.deleteToken}</code></p>
           <div className="actions">
             <button className="button danger" onClick={onDelete} disabled={busy || deleted}>{deleted ? 'Deleted' : 'Delete now'}</button>
+            <button className="button secondary" onClick={createAnother}>Create another secret</button>
           </div>
           {sendEmail ? (
             <div className="alert notice">
@@ -173,8 +169,96 @@ export function CreatePage() {
                 : 'The secret was created, but the email notice could not be sent. Copy the secure link instead.'}
             </div>
           ) : null}
+          {result.notifyOnReveal ? (
+            <div className="alert notice">
+              The sender will be notified once after the recipient successfully reveals the secret.
+            </div>
+          ) : null}
+          {error ? <div className="alert error">{error}</div> : null}
         </section>
-      ) : null}
+      ) : (
+        <form className="tool-surface" onSubmit={onSubmit} noValidate>
+          <div className="form-grid">
+            <Field label="Sender email" required error={fieldErrors.senderEmail}>
+              <input
+                value={senderEmail}
+                onChange={(event) => setSenderEmail(event.target.value)}
+                type="email"
+                aria-invalid={fieldErrors.senderEmail ? 'true' : 'false'}
+              />
+            </Field>
+            <Field
+              label="Recipient email"
+              required={sendEmail}
+              error={fieldErrors.recipientEmail}
+              hint={sendEmail ? 'Required for sending only, never stored after the email is sent.' : undefined}
+            >
+              <input
+                value={recipientEmail}
+                onChange={(event) => setRecipientEmail(event.target.value)}
+                type="email"
+                placeholder={sendEmail ? 'recipient@example.com' : 'Optional'}
+                aria-invalid={fieldErrors.recipientEmail ? 'true' : 'false'}
+              />
+            </Field>
+          </div>
+
+          <Field label="Secret text" required error={fieldErrors.secretText}>
+            <textarea
+              value={secretText}
+              onChange={(event) => setSecretText(event.target.value)}
+              aria-invalid={fieldErrors.secretText ? 'true' : 'false'}
+              rows={8}
+            />
+          </Field>
+
+          <div className="form-grid">
+            <Field label="Expiry">
+              <select value={expiresInMinutes} onChange={(event) => setExpiresInMinutes(Number(event.target.value))}>
+                {expiries.map(([label, value]) => (
+                  <option value={value} key={value}>{label}</option>
+                ))}
+              </select>
+            </Field>
+            <div className="toggle-stack" aria-label="Secret options">
+              <label><input type="checkbox" checked={oneTime} onChange={(event) => setOneTime(event.target.checked)} /> One-time view</label>
+              <label><input type="checkbox" checked={manualLink} onChange={(event) => setManualLink(event.target.checked)} /> Manual copy link</label>
+              <label><input type="checkbox" checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} /> Send keyless email notice</label>
+              <label><input type="checkbox" checked={notifyOnReveal} onChange={(event) => setNotifyOnReveal(event.target.checked)} /> Notify sender when revealed</label>
+              <label><input type="checkbox" checked={passphraseEnabled} onChange={(event) => setPassphraseEnabled(event.target.checked)} /> Require passphrase</label>
+            </div>
+          </div>
+
+          {passphraseEnabled ? (
+            <Field label="Passphrase" required error={fieldErrors.passphrase} hint="The passphrase is used only in this browser and is never sent.">
+              <input
+                value={passphrase}
+                onChange={(event) => setPassphrase(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                aria-invalid={fieldErrors.passphrase ? 'true' : 'false'}
+              />
+            </Field>
+          ) : null}
+
+          {notifyOnReveal ? (
+            <div className="alert notice">
+              To send this notice, bQuick Secret stores the sender email only until the first successful reveal notification is claimed.
+            </div>
+          ) : null}
+
+          {error ? <div className="alert error">{error}</div> : null}
+
+          <div className="actions">
+            <button className="button primary" disabled={busy}>{busy ? 'Working...' : 'Create encrypted secret'}</button>
+          </div>
+        </form>
+      )}
     </section>
   );
+}
+
+function looksLikeEmail(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length <= 254 && trimmed.includes('@') && trimmed.includes('.');
 }
