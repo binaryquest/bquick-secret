@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -19,6 +18,21 @@ type Verifier struct {
 	minScore     float64
 	projectID    string
 	siteKey      string
+}
+
+type VerificationError struct {
+	Action         string
+	ExpectedAction string
+	ExpectedHost   string
+	Hostname       string
+	InvalidReason  string
+	Reason         string
+	Score          float64
+	StatusCode     int
+}
+
+func (e *VerificationError) Error() string {
+	return "recaptcha verification failed: " + e.Reason
 }
 
 type Config struct {
@@ -56,7 +70,7 @@ func (v *Verifier) Verify(ctx context.Context, token, expectedAction string) err
 		return nil
 	}
 	if strings.TrimSpace(token) == "" {
-		return errors.New("missing token")
+		return &VerificationError{Reason: "missing_token", ExpectedAction: expectedAction, ExpectedHost: v.expectedHost}
 	}
 
 	body, err := json.Marshal(assessmentRequest{
@@ -83,7 +97,12 @@ func (v *Verifier) Verify(ctx context.Context, token, expectedAction string) err
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return fmt.Errorf("recaptcha assessment failed with status %d", res.StatusCode)
+		return &VerificationError{
+			Reason:         "assessment_http_status",
+			ExpectedAction: expectedAction,
+			ExpectedHost:   v.expectedHost,
+			StatusCode:     res.StatusCode,
+		}
 	}
 
 	var assessment assessmentResponse
@@ -91,16 +110,45 @@ func (v *Verifier) Verify(ctx context.Context, token, expectedAction string) err
 		return err
 	}
 	if !assessment.TokenProperties.Valid {
-		return errors.New("invalid token")
+		return &VerificationError{
+			Action:         assessment.TokenProperties.Action,
+			ExpectedAction: expectedAction,
+			ExpectedHost:   v.expectedHost,
+			Hostname:       assessment.TokenProperties.Hostname,
+			InvalidReason:  assessment.TokenProperties.InvalidReason,
+			Reason:         "invalid_token",
+			Score:          assessment.RiskAnalysis.Score,
+		}
 	}
 	if assessment.TokenProperties.Action != expectedAction {
-		return errors.New("action mismatch")
+		return &VerificationError{
+			Action:         assessment.TokenProperties.Action,
+			ExpectedAction: expectedAction,
+			ExpectedHost:   v.expectedHost,
+			Hostname:       assessment.TokenProperties.Hostname,
+			Reason:         "action_mismatch",
+			Score:          assessment.RiskAnalysis.Score,
+		}
 	}
 	if v.expectedHost != "" && assessment.TokenProperties.Hostname != "" && assessment.TokenProperties.Hostname != v.expectedHost {
-		return errors.New("hostname mismatch")
+		return &VerificationError{
+			Action:         assessment.TokenProperties.Action,
+			ExpectedAction: expectedAction,
+			ExpectedHost:   v.expectedHost,
+			Hostname:       assessment.TokenProperties.Hostname,
+			Reason:         "hostname_mismatch",
+			Score:          assessment.RiskAnalysis.Score,
+		}
 	}
 	if assessment.RiskAnalysis.Score < v.minScore {
-		return errors.New("score too low")
+		return &VerificationError{
+			Action:         assessment.TokenProperties.Action,
+			ExpectedAction: expectedAction,
+			ExpectedHost:   v.expectedHost,
+			Hostname:       assessment.TokenProperties.Hostname,
+			Reason:         "score_too_low",
+			Score:          assessment.RiskAnalysis.Score,
+		}
 	}
 	return nil
 }
@@ -120,8 +168,9 @@ type assessmentResponse struct {
 		Score float64 `json:"score"`
 	} `json:"riskAnalysis"`
 	TokenProperties struct {
-		Action   string `json:"action"`
-		Hostname string `json:"hostname"`
-		Valid    bool   `json:"valid"`
+		Action        string `json:"action"`
+		Hostname      string `json:"hostname"`
+		InvalidReason string `json:"invalidReason"`
+		Valid         bool   `json:"valid"`
 	} `json:"tokenProperties"`
 }

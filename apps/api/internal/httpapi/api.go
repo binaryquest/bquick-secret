@@ -221,7 +221,23 @@ func (api *API) verifyRecaptcha(r *http.Request, token, action string) error {
 		return nil
 	}
 	if err := api.captcha.Verify(r.Context(), token, action); err != nil {
-		api.logger.Warn("recaptcha_failed", "category", "verification")
+		var verificationErr *recaptcha.VerificationError
+		if errors.As(err, &verificationErr) {
+			api.logger.Warn(
+				"recaptcha_failed",
+				"category", "verification",
+				"reason", verificationErr.Reason,
+				"status", verificationErr.StatusCode,
+				"score", verificationErr.Score,
+				"action", verificationErr.Action,
+				"expected_action", verificationErr.ExpectedAction,
+				"hostname", verificationErr.Hostname,
+				"expected_host", verificationErr.ExpectedHost,
+				"invalid_reason", verificationErr.InvalidReason,
+			)
+		} else {
+			api.logger.Warn("recaptcha_failed", "category", "verification", "reason", "request_failed")
+		}
 		return err
 	}
 	return nil
