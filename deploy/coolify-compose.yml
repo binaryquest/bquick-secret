@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bquick_secret}
+      POSTGRES_USER: ${POSTGRES_USER:-bquick_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bquick_secret} -d ${POSTGRES_DB:-bquick_secret}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../apps/api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_BASE_URL: ${APP_BASE_URL:?}
+      DATABASE_URL: ${DATABASE_URL:?}
+      SES_REGION: ${SES_REGION:-}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      MAX_SECRET_BYTES: ${MAX_SECRET_BYTES:-262144}
+      MAX_EXPIRY_MINUTES: ${MAX_EXPIRY_MINUTES:-10080}
+      DEFAULT_EXPIRY_MINUTES: ${DEFAULT_EXPIRY_MINUTES:-1440}
+      DEFAULT_ONE_TIME: ${DEFAULT_ONE_TIME:-true}
+      ADMIN_STATS_TOKEN: ${ADMIN_STATS_TOKEN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RATE_LIMIT_CREATE_PER_HOUR: ${RATE_LIMIT_CREATE_PER_HOUR:-20}
+      RATE_LIMIT_EMAIL_PER_HOUR: ${RATE_LIMIT_EMAIL_PER_HOUR:-20}
+      PORT: 8081
+    expose:
+      - "8081"
+
+  web:
+    build:
+      context: ../apps/web
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - api
+    expose:
+      - "80"
+
+volumes:
+  postgres-data:

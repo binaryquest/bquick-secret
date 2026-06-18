@@ -35,6 +35,10 @@ docker compose -f deploy/docker-compose.yml up --build
 
 For frontend-only development, run the Vite app from `apps/web`. For API-only development, run the Go service from `apps/api`.
 
+## Coolify Deployment
+
+Use `deploy/coolify-compose.yml` for production Coolify deployments. Assign your public domain to the `web` service on container port `80`; keep `api` and `postgres` private inside the Compose network.
+
 ## Zero-Knowledge Email Behavior
 
 The backend never receives URL fragments, decrypt keys, plaintext secrets, or passphrases. Because of that, SES email sends a keyless notification link to `/s/{publicId}`. The sender must separately share the full secure link containing `#key=...` or the fragment key through another channel.
