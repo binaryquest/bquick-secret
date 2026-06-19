@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchSecret, reportSecretRevealed, SecretPayload } from '../lib/api';
-import { decryptSecret, readFragmentKey } from '../lib/crypto';
+import { createRevealProof, decryptSecret, readFragmentKey } from '../lib/crypto';
 
 export function SecretPage({ publicId }: { publicId: string }) {
   const [payload, setPayload] = useState<SecretPayload | null>(null);
@@ -75,7 +75,9 @@ export function SecretPage({ publicId }: { publicId: string }) {
         kdfIterations: payload.kdfIterations
       });
       setSecret(plaintext);
-      void reportSecretRevealed(publicId).catch(() => undefined);
+      void createRevealProof(fragmentKey)
+        .then((revealProof) => reportSecretRevealed(publicId, revealProof))
+        .catch(() => undefined);
     } catch {
       setError('Could not decrypt the secret. Check the link key and passphrase.');
     } finally {

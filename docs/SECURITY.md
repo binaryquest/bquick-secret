@@ -20,7 +20,7 @@ Decrypt material is stored after `#key=` in the browser URL. URL fragments are n
 
 SES email is intentionally keyless. It contains the `/s/{publicId}` route without `#key=...`. The sender must share the full secure link or fragment key through another channel. This preserves the zero-knowledge backend guarantee.
 
-If the sender opts into reveal notification, the backend stores the sender email only as a notification target. After the browser reports a successful local decrypt, the backend claims the one-time notice and clears the stored notification email.
+If the sender opts into reveal notification, the backend stores the sender email only as a notification target. The browser must present a proof derived from the URL fragment key after successful local decrypt; public IDs alone cannot claim the notice. After the one-time notice is claimed, the backend clears the stored notification email.
 
 ## Passphrase Mode
 

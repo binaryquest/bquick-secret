@@ -20,7 +20,7 @@ Phase 2 adds browser-encrypted file sharing up to 1 GB using direct S3 upload/do
 - Email: Amazon SES
 - Deployment: Docker Compose via Coolify
 - Phase 2 Files: Browser-side chunk encryption + S3 presigned upload/download
-- Stats: Daily aggregate counters plus privacy-aware Google Analytics page views
+- Stats: Daily aggregate counters plus optional privacy-aware Google Analytics page views
 
 Strict rule: the backend must never receive plaintext secrets, decryption keys, passphrases, or full URLs containing URL fragments.
 
@@ -122,7 +122,7 @@ Store daily counts only: secrets created, opened, expired, deleted, emails sent,
 
 ## 8. Privacy Requirements
 
-The system may use Google Analytics for basic page-view measurement only if secret IDs are masked, URL fragments are never sent, ad personalization and Google signals are disabled, and tracking cookies/client-side storage are disabled.
+The system may use Google Analytics for basic page-view measurement only when configured by environment. Secret IDs must be masked, URL fragments must never be sent, ad personalization and Google signals must be disabled, and tracking cookies/client-side storage must be disabled.
 
 The system must not store plaintext secret, decrypt key, passphrase, recipient email after sending, full URLs, referrer, browser fingerprint, or user behavior trail. If the sender opts into reveal notification, the sender email may be temporarily stored as a notification target and should be cleared after the one-time notification is claimed.
 

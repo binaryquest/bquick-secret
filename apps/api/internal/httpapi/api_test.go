@@ -39,6 +39,17 @@ func TestValidateCreateRequiresPassphraseMetadata(t *testing.T) {
 	}
 }
 
+func TestValidateCreateRequiresRevealProofWhenNotifyEnabled(t *testing.T) {
+	api := &API{cfg: config.Config{MaxSecretBytes: 1024, MaxExpiryMinutes: 10080}}
+	req := validCreateRequest()
+	req.NotifyOnReveal = true
+
+	_, _, _, _, _, message := api.validateCreate(req)
+	if message != "reveal proof is required" {
+		t.Fatalf("expected reveal proof validation, got %q", message)
+	}
+}
+
 func validCreateRequest() createSecretRequest {
 	return createSecretRequest{
 		SenderEmail:      "sender@example.com",

@@ -19,3 +19,8 @@ func Hash(value string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(strings.ToLower(value))))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
+
+func HashToken(value string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(value)))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
