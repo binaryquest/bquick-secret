@@ -8,8 +8,8 @@ export function PrivacyPage() {
         It does not store plaintext secrets, decrypt keys, passphrases, full URLs, tracking cookies, or recipient email after sending.
       </p>
       <p>
-        Google Analytics is used for basic page-view measurement. Secret-page paths are masked, URL fragments are not sent, and Google
-        signals, ad personalization, and client-side storage are disabled in the tag configuration.
+        Google Analytics may be enabled for basic page-view measurement. When enabled, secret-page paths are masked, URL fragments are not
+        sent, and Google signals, ad personalization, and client-side storage are disabled in the tag configuration.
       </p>
       <p>
         Email notices are sent without the decrypt key. The sender controls how the full secure link or fragment key is shared.

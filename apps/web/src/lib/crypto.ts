@@ -83,6 +83,13 @@ export async function decryptSecret(args: {
   return decoder.decode(decrypted);
 }
 
+export async function createRevealProof(fragmentKey: string): Promise<string> {
+  const keyBytes = base64URLToBytes(fragmentKey);
+  const prefix = encoder.encode('bquick-secret-reveal-v1:');
+  const proof = await crypto.subtle.digest('SHA-256', toArrayBuffer(joinBytes(prefix, keyBytes)));
+  return bytesToBase64URL(proof);
+}
+
 export function readFragmentKey(): string {
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   return hash.get('key') || '';

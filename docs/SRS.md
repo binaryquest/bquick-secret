@@ -128,6 +128,7 @@ Request:
   "sendEmail": true,
   "manualLink": true,
   "notifyOnReveal": false,
+  "revealProof": "fragment-derived-proof",
   "recaptchaToken": "recaptcha-enterprise-token"
 }
 ```
@@ -149,8 +150,9 @@ Validation:
 - iv required
 - expiry must be <= 7 days
 - payload size must be within configured limit
+- revealProof required if notifyOnReveal=true
 
-If notifyOnReveal=true, the backend stores the sender email as the one-time notification target until the reveal notice is claimed.
+If notifyOnReveal=true, the backend stores the sender email as the one-time notification target until the reveal notice is claimed. The revealProof must be derived from the browser-only URL fragment key without sending the key itself.
 
 If reCAPTCHA Enterprise is configured, recaptchaToken is required and must verify for action `create_secret`, the configured site key, the expected hostname, and the configured minimum score.
 
@@ -177,7 +179,7 @@ For one-time secrets, the server should consume on first successful encrypted pa
 
 ### 6.3 POST /api/secrets/:publicId/revealed
 
-Called by the browser only after local decryption succeeds. If sender notification was enabled and not already claimed, the backend sends a one-time email notice to the sender. The request must not include plaintext, decrypt keys, passphrases, or full URLs.
+Called by the browser only after local decryption succeeds. The request includes the fragment-derived revealProof. If sender notification was enabled, the proof matches, and the notice was not already claimed, the backend sends a one-time email notice to the sender. The request must not include plaintext, decrypt keys, passphrases, or full URLs.
 
 Response:
 

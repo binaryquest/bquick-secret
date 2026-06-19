@@ -1,4 +1,4 @@
-const measurementId = 'G-QT7NS9WP6D';
+const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID || '';
 
 declare global {
   interface Window {
@@ -8,6 +8,10 @@ declare global {
 }
 
 export function initAnalytics() {
+  if (!measurementId) {
+    return;
+  }
+
   loadGoogleTag();
 
   window.dataLayer = window.dataLayer || [];

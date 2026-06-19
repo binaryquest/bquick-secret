@@ -13,6 +13,7 @@ export type CreateSecretRequest = {
   sendEmail: boolean;
   manualLink: boolean;
   notifyOnReveal: boolean;
+  revealProof?: string;
   recaptchaToken?: string;
   wrappedKey?: string;
   wrappingIv?: string;
@@ -55,9 +56,11 @@ export async function fetchSecret(publicId: string): Promise<SecretPayload> {
   return parseResponse(response);
 }
 
-export async function reportSecretRevealed(publicId: string): Promise<void> {
+export async function reportSecretRevealed(publicId: string, revealProof: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/secrets/${encodeURIComponent(publicId)}/revealed`, {
-    method: 'POST'
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ revealProof })
   });
   await parseResponse(response);
 }

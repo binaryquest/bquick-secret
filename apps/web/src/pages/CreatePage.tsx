@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { Field } from '../components/Field';
 import { createSecret, deleteSecret } from '../lib/api';
-import { encryptSecret } from '../lib/crypto';
+import { createRevealProof, encryptSecret } from '../lib/crypto';
 import { getRecaptchaToken, isRecaptchaEnabled } from '../lib/recaptcha';
 
 const expiries = [
@@ -75,6 +75,7 @@ export function CreatePage() {
     try {
       const recaptchaToken = await getRecaptchaToken('create_secret');
       const encrypted = await encryptSecret(secretText, passphraseEnabled ? passphrase : undefined);
+      const revealProof = notifyOnReveal ? await createRevealProof(encrypted.fragmentKey) : undefined;
       const response = await createSecret({
         senderEmail: senderEmail.trim(),
         recipientEmail: recipientEmail.trim() || undefined,
@@ -88,6 +89,7 @@ export function CreatePage() {
         sendEmail,
         manualLink,
         notifyOnReveal,
+        revealProof,
         recaptchaToken,
         wrappedKey: encrypted.wrappedKey,
         wrappingIv: encrypted.wrappingIv,

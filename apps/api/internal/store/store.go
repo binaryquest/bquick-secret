@@ -29,6 +29,7 @@ type CreateSecretParams struct {
 	PassphraseEnabled      bool
 	NotifySenderOnReveal   bool
 	SenderNotifyEmail      string
+	RevealTokenHash        string
 	DeleteTokenHash        string
 	PayloadSizeBytes       int
 	WrappedKey             []byte
@@ -97,17 +98,18 @@ func (s *Store) CreateSecret(ctx context.Context, params CreateSecretParams) err
 		INSERT INTO secrets (
 			public_id, encrypted_payload, iv, algorithm, version, expires_at, one_time,
 			sender_email_hash, recipient_email_provided, manual_link_enabled, passphrase_enabled,
-			notify_sender_on_reveal, sender_notify_email, delete_token_hash, payload_size_bytes,
+			notify_sender_on_reveal, sender_notify_email, reveal_token_hash, delete_token_hash, payload_size_bytes,
 			wrapped_key, wrapping_iv, kdf_salt, kdf_iterations, kdf_algorithm
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11,
 			$12, $13, $14, $15, $16,
-			$17, $18, $19, $20
+			$17, $18, $19, $20, $21
 		)
 	`, params.PublicID, params.EncryptedPayload, params.IV, params.Algorithm, params.Version, params.ExpiresAt, params.OneTime,
 		params.SenderEmailHash, params.RecipientEmailProvided, params.ManualLinkEnabled, params.PassphraseEnabled,
-		params.NotifySenderOnReveal, nilIfEmptyString(params.SenderNotifyEmail), params.DeleteTokenHash, params.PayloadSizeBytes,
+		params.NotifySenderOnReveal, nilIfEmptyString(params.SenderNotifyEmail), nilIfEmptyString(params.RevealTokenHash),
+		params.DeleteTokenHash, params.PayloadSizeBytes,
 		nilIfEmpty(params.WrappedKey), nilIfEmpty(params.WrappingIV),
 		nilIfEmpty(params.KDFSalt), nilIfZero(params.KDFIterations), nilIfEmptyString(params.KDFAlgorithm))
 	return err
@@ -159,16 +161,19 @@ func (s *Store) DeleteSecret(ctx context.Context, publicID, deleteTokenHash stri
 	return tag.RowsAffected() == 1, nil
 }
 
-func (s *Store) ClaimRevealNotification(ctx context.Context, publicID string) (string, error) {
+func (s *Store) ClaimRevealNotification(ctx context.Context, publicID, revealTokenHash string) (string, error) {
 	row := s.pool.QueryRow(ctx, `
 		WITH pending AS (
 			SELECT sender_notify_email
 			FROM secrets
 			WHERE public_id = $1
 				AND deleted_at IS NULL
+				AND expires_at > now()
 				AND notify_sender_on_reveal = true
 				AND sender_notify_email IS NOT NULL
 				AND sender_notified_at IS NULL
+				AND reveal_token_hash = $2
+				AND (one_time = false OR consumed_at IS NOT NULL)
 			FOR UPDATE
 		)
 		UPDATE secrets
@@ -176,7 +181,7 @@ func (s *Store) ClaimRevealNotification(ctx context.Context, publicID string) (s
 		FROM pending
 		WHERE public_id = $1
 		RETURNING pending.sender_notify_email
-	`, publicID)
+	`, publicID, revealTokenHash)
 
 	var senderEmail string
 	err := row.Scan(&senderEmail)
@@ -281,6 +286,22 @@ func (s *Store) CleanupExpired(ctx context.Context, now time.Time) (int64, int64
 	if err != nil {
 		return 0, 0, err
 	}
+	consumedPurgeTag, err := tx.Exec(ctx, `
+		DELETE FROM secrets
+		WHERE one_time = true
+			AND consumed_at IS NOT NULL
+			AND consumed_at < $1
+	`, purgeBefore)
+	if err != nil {
+		return 0, 0, err
+	}
+	rateLimitPurgeTag, err := tx.Exec(ctx, `
+		DELETE FROM rate_limit_buckets
+		WHERE resets_at < $1
+	`, purgeBefore)
+	if err != nil {
+		return 0, 0, err
+	}
 
 	for i := int64(0); i < expired; i++ {
 		if err := incrementStatsTx(ctx, tx, now, "secrets_expired_count"); err != nil {
@@ -288,7 +309,8 @@ func (s *Store) CleanupExpired(ctx context.Context, now time.Time) (int64, int64
 		}
 	}
 
-	return expired, purgeTag.RowsAffected(), tx.Commit(ctx)
+	purged := purgeTag.RowsAffected() + consumedPurgeTag.RowsAffected() + rateLimitPurgeTag.RowsAffected()
+	return expired, purged, tx.Commit(ctx)
 }
 
 func incrementStatsTx(ctx context.Context, tx pgx.Tx, day time.Time, column string) error {

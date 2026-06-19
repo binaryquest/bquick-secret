@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS secrets (
     notify_sender_on_reveal BOOLEAN NOT NULL DEFAULT FALSE,
     sender_notify_email TEXT NULL,
     sender_notified_at TIMESTAMPTZ NULL,
+    reveal_token_hash TEXT NULL,
     wrapped_key BYTEA NULL,
     wrapping_iv BYTEA NULL,
     kdf_salt BYTEA NULL,

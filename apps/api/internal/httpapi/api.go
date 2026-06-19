@@ -43,7 +43,7 @@ func New(cfg config.Config, store *store.Store, mailer email.Sender, logger *slo
 	mux.HandleFunc("DELETE /api/secrets/{publicId}", api.deleteSecret)
 	mux.HandleFunc("GET /api/stats/daily", api.dailyStats)
 
-	return securityHeaders(logging(logger, mux))
+	return securityHeaders(cfg.AppBaseURL, logging(logger, mux))
 }
 
 type createSecretRequest struct {
@@ -59,6 +59,7 @@ type createSecretRequest struct {
 	SendEmail         bool   `json:"sendEmail"`
 	ManualLink        bool   `json:"manualLink"`
 	NotifyOnReveal    bool   `json:"notifyOnReveal"`
+	RevealProof       string `json:"revealProof,omitempty"`
 	RecaptchaToken    string `json:"recaptchaToken,omitempty"`
 	WrappedKey        string `json:"wrappedKey,omitempty"`
 	WrappingIV        string `json:"wrappingIv,omitempty"`
@@ -159,8 +160,10 @@ func (api *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	senderNotifyEmail := ""
+	revealTokenHash := ""
 	if req.NotifyOnReveal {
 		senderNotifyEmail = strings.TrimSpace(req.SenderEmail)
+		revealTokenHash = secretcrypto.HashToken(req.RevealProof)
 	}
 
 	err = api.store.CreateSecret(r.Context(), store.CreateSecretParams{
@@ -177,6 +180,7 @@ func (api *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		PassphraseEnabled:      req.PassphraseEnabled,
 		NotifySenderOnReveal:   req.NotifyOnReveal,
 		SenderNotifyEmail:      senderNotifyEmail,
+		RevealTokenHash:        revealTokenHash,
 		DeleteTokenHash:        secretcrypto.Hash(deleteToken),
 		PayloadSizeBytes:       len(payload),
 		WrappedKey:             wrapped,
@@ -262,6 +266,9 @@ func (api *API) validateCreate(req createSecretRequest) ([]byte, []byte, []byte,
 	if req.ExpiresInMinutes <= 0 || req.ExpiresInMinutes > api.cfg.MaxExpiryMinutes {
 		return nil, nil, nil, nil, nil, "expiry is invalid"
 	}
+	if req.NotifyOnReveal && !validRevealProof(req.RevealProof) {
+		return nil, nil, nil, nil, nil, "reveal proof is required"
+	}
 
 	payload, err := decodeBase64URL(req.EncryptedPayload)
 	if err != nil || len(payload) == 0 || len(payload) > api.cfg.MaxSecretBytes {
@@ -336,7 +343,15 @@ func (api *API) secretRevealed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	senderEmail, err := api.store.ClaimRevealNotification(r.Context(), publicID)
+	var req struct {
+		RevealProof string `json:"revealProof"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil || !validRevealProof(req.RevealProof) {
+		writeError(w, http.StatusBadRequest, "reveal proof is required")
+		return
+	}
+
+	senderEmail, err := api.store.ClaimRevealNotification(r.Context(), publicID, secretcrypto.HashToken(req.RevealProof))
 	if errors.Is(err, store.ErrNotFound) {
 		writeJSON(w, http.StatusOK, map[string]bool{"notified": false})
 		return
@@ -429,6 +444,19 @@ func looksLikeEmail(value string) bool {
 
 func validPublicID(value string) bool {
 	if len(value) < 8 || len(value) > 80 {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func validRevealProof(value string) bool {
+	if len(value) < 32 || len(value) > 96 {
 		return false
 	}
 	for _, r := range value {
